@@ -37,6 +37,7 @@ use actix_reverse_proxy::ReverseProxy;
 use std::time::Duration;
 
 const REVERSE_PROXY_IP: &'static str = "127.0.0.1";
+const REVERSE_PROXY_BIND_ADDRESS: &'static str = "127.0.0.1:13900";
 
 fn dummy(req: HttpRequest) -> impl Future<Item=actix_web::HttpResponse, Error=actix_web::Error> {
     let proxy_instance = ReverseProxy::new(REVERSE_PROXY_IP, "http://127.0.0.1:13901")
@@ -46,13 +47,10 @@ fn dummy(req: HttpRequest) -> impl Future<Item=actix_web::HttpResponse, Error=ac
 }
 
 fn main() {
-    let addr = "127.0.0.1:13900";
-    println!("proxy server rodando em  {}", addr);
-
     server::new(|| App::new()
             .resource("/dummy/{tail:.*}", |r| r.with_async(dummy))
         )
-        .bind(addr)
+        .bind(REVERSE_PROXY_BIND_ADDRESS)
         .unwrap()
         .run();
 }
