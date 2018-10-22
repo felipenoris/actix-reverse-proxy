@@ -40,10 +40,9 @@ const REVERSE_PROXY_IP: &'static str = "127.0.0.1";
 const REVERSE_PROXY_BIND_ADDRESS: &'static str = "127.0.0.1:13900";
 
 fn dummy(req: HttpRequest) -> impl Future<Item=actix_web::HttpResponse, Error=actix_web::Error> {
-    let proxy_instance = ReverseProxy::new(REVERSE_PROXY_IP, "http://127.0.0.1:13901")
-        .timeout(Duration::from_secs(1));
-
-    proxy_instance.forward(req)
+    ReverseProxy::new(REVERSE_PROXY_IP, "http://127.0.0.1:13901")
+        .timeout(Duration::from_secs(1))
+        .forward(req)
 }
 
 fn main() {
