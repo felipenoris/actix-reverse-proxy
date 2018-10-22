@@ -4,10 +4,13 @@
 extern crate actix_web;
 extern crate futures;
 
-use actix_web::{HttpRequest, HttpResponse, HttpMessage, client, http::header::HeaderName};
+use actix_web::{HttpRequest, HttpResponse, HttpMessage, client};
+use actix_web::http::header::{HeaderName, HeaderValue, HeaderMap};
 use futures::{Stream, Future};
 
 use std::time::Duration;
+use std::net::{SocketAddr, IpAddr};
+use std::str::FromStr;
 
 #[cfg(test)]
 mod tests;
@@ -22,6 +25,91 @@ pub struct ReverseProxy<'a> {
 
 fn x_forwarded_for_header_name() -> HeaderName {
     HeaderName::from_bytes(X_FORWARDED_FOR_HEADER_NAME_BYTES).unwrap()
+}
+
+fn add_client_ip(fwd_header_value: &mut String, client_ip: &str) {
+    if !fwd_header_value.is_empty() {
+        fwd_header_value.push_str(", ");
+    }
+    fwd_header_value.push_str(client_ip);
+}
+
+fn parse_and_add_client_ip(fwd_header_value: &mut String, client_address: &str) {
+    match SocketAddr::from_str(client_address) {
+        Ok(client_address) => {
+            let client_ip = format!("{}", client_address.ip());
+            add_client_ip(fwd_header_value, &client_ip);
+        },
+        Err(_) => {
+            match IpAddr::from_str(client_address) {
+                Ok(_) => {
+                    add_client_ip(fwd_header_value, client_address);
+                },
+                Err(e) => println!("Failed parsing client IP for {}: {:?}", client_address, e),
+            }
+        }
+    };
+}
+
+// based on https://golang.org/src/net/http/httputil/reverseproxy.go
+fn remove_connection_headers(headers: &mut HeaderMap) {
+    let mut headers_to_delete: Vec<String> = Vec::new();
+
+    if headers.contains_key("Connection") {
+        if let Ok(connection_header_value) = headers["Connection"].to_str() {
+            for h in connection_header_value.split(',').map(|s| s.trim()) {
+                headers_to_delete.push(String::from(h));
+            }
+        }
+    }
+
+    for h in headers_to_delete {
+        // DEBUG
+        if headers.contains_key(&h) {
+            println!("Removing Connection header `{}`", h);
+        }
+
+        headers.remove(h);
+    }
+}
+
+// based on https://golang.org/src/net/http/httputil/reverseproxy.go
+fn disable_user_agent_if_not_set(headers: &mut HeaderMap) {
+    let user_agent_header = actix_web::http::header::USER_AGENT;
+
+    if !headers.contains_key(&user_agent_header) {
+        headers.insert(&user_agent_header, HeaderValue::from_static(""));
+    }
+}
+
+// based on https://golang.org/src/net/http/httputil/reverseproxy.go
+const HOP_BY_HOP_HEADERS: [&str; 9] = [
+        "Connection",
+        "Proxy-Connection",
+        "Keep-Alive",
+        "Proxy-Authenticate",
+        "Proxy-Authorization",
+        "Te",
+        "Trailer",
+        "Transfer-Encoding",
+        "Upgrade",
+];
+
+// based on https://golang.org/src/net/http/httputil/reverseproxy.go
+fn remove_request_hop_by_hop_headers(headers: &mut HeaderMap) {
+    for h in HOP_BY_HOP_HEADERS.iter() {
+        if headers.contains_key(*h) && (headers[*h] == "" || ( *h == "Te" && headers[*h] == "trailers")  ) {
+            continue;
+        }
+        headers.remove(*h);
+    }
+}
+
+// based on https://golang.org/src/net/http/httputil/reverseproxy.go
+fn remove_response_hop_by_hop_headers(headers: &mut HeaderMap) {
+    for h in HOP_BY_HOP_HEADERS.iter() {
+        headers.remove(*h);
+    }
 }
 
 impl<'a> ReverseProxy<'a> {
@@ -56,13 +144,11 @@ impl<'a> ReverseProxy<'a> {
 
         // adds client IP address
         // to x-forwarded-for header
+        // if it's available
         let client_connection_info = req.connection_info();
-        let client_remote_ip = client_connection_info.remote().unwrap();
-
-        if !result.is_empty() {
-            result.push_str(", ");
+        if let Some(client_address) = client_connection_info.remote() {
+            parse_and_add_client_ip(&mut result, client_address)
         }
-        result.push_str(client_remote_ip);
 
         result
     }
@@ -83,13 +169,23 @@ impl<'a> ReverseProxy<'a> {
         let mut forward_req = client::ClientRequest::build_from(&req);
         forward_req.uri(self.forward_uri(&req).as_str());
         forward_req.set_header(x_forwarded_for_header_name(), self.x_forwarded_for_value(&req));
-        forward_req.set_header(actix_web::http::header::USER_AGENT, "");
 
         let forward_body = req.payload().from_err();
-        let forward_req = forward_req.body(actix_web::Body::Streaming(Box::new(forward_body)));
+        let mut forward_req = forward_req
+                                    .body(actix_web::Body::Streaming(Box::new(forward_body)))
+                                    .expect("To create valid forward request");
 
-        forward_req.expect("To create valid forward request")
-                    .send()
+        remove_connection_headers(forward_req.headers_mut());
+        disable_user_agent_if_not_set(forward_req.headers_mut());
+        remove_request_hop_by_hop_headers(forward_req.headers_mut());
+
+        // DEBUG
+        println!("#### ClientRequest Headers ####");
+        for (key, value) in forward_req.headers() {
+            println!("[{:?}] = {:?}", key, value);
+        }
+
+        forward_req.send()
                     .timeout(self.get_timeout())
                     .map_err(|error| {
                         println!("Error: {}", error);
@@ -97,12 +193,24 @@ impl<'a> ReverseProxy<'a> {
                     })
                     .map(|resp| {
                         let mut back_rsp = HttpResponse::build(resp.status());
+
+                        // copy headers
                         for (key, value) in resp.headers() {
                             back_rsp.header(key.clone(), value.clone());
                         }
 
                         let back_body = resp.payload().from_err();
-                        back_rsp.body(actix_web::Body::Streaming(Box::new(back_body)))
+                        let mut back_rsp = back_rsp.body(actix_web::Body::Streaming(Box::new(back_body)));
+                        remove_connection_headers(back_rsp.headers_mut());
+                        remove_response_hop_by_hop_headers(back_rsp.headers_mut());
+
+                        // DEBUG
+                        println!("#### Response Headers ####");
+                        for (key, value) in back_rsp.headers() {
+                            println!("[{:?}] = {:?}", key, value);
+                        }
+
+                        back_rsp
                     })
     }
 }
