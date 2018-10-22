@@ -22,7 +22,7 @@ futures = "0.1"
 actix-reverse-proxy = { git = "https://github.com/felipenoris/actix-reverse-proxy" }
 ```
 
-Edit `main.rs` with the following. In this example, calls to `http://127.0.0.1:13900/dummy/anything?hey=you`
+Edit `main.rs` with the following. In this example, calls to `http://0.0.0.0:13900/dummy/anything?hey=you`
 will be proxied to `http://127.0.0.1:13901/dummy/anything?hey=you`.
 
 ```rust
@@ -36,11 +36,10 @@ use actix_reverse_proxy::ReverseProxy;
 
 use std::time::Duration;
 
-const REVERSE_PROXY_IP: &'static str = "127.0.0.1";
-const REVERSE_PROXY_BIND_ADDRESS: &'static str = "127.0.0.1:13900";
+const REVERSE_PROXY_BIND_ADDRESS: &'static str = "0.0.0.0:13900";
 
 fn dummy(req: HttpRequest) -> impl Future<Item=actix_web::HttpResponse, Error=actix_web::Error> {
-    ReverseProxy::new(REVERSE_PROXY_IP, "http://127.0.0.1:13901")
+    ReverseProxy::new("http://127.0.0.1:13901")
         .timeout(Duration::from_secs(1))
         .forward(req)
 }
