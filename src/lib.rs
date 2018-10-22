@@ -4,17 +4,24 @@
 extern crate actix_web;
 extern crate futures;
 
-use actix_web::{HttpRequest, HttpResponse, HttpMessage, client};
+use actix_web::{HttpRequest, HttpResponse, HttpMessage, client, http::header::HeaderName};
 use futures::{Stream, Future};
 
 use std::time::Duration;
 
-const X_FORWARDED_HEADER_NAME: &'static str = "x-forwarded-for";
+#[cfg(test)]
+mod tests;
+
+const X_FORWARDED_FOR_HEADER_NAME_BYTES: &'static [u8] = b"X-Forwarded-For";
 static DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub struct ReverseProxy<'a> {
     forward_url: &'a str,
     timeout: Duration,
+}
+
+fn x_forwarded_for_header_name() -> HeaderName {
+    HeaderName::from_bytes(X_FORWARDED_FOR_HEADER_NAME_BYTES).unwrap()
 }
 
 impl<'a> ReverseProxy<'a> {
@@ -36,29 +43,26 @@ impl<'a> ReverseProxy<'a> {
         self.forward_url
     }
 
-    fn x_forwarded_header(&self, req: &HttpRequest) -> String {
+    fn x_forwarded_for_value(&self, req: &HttpRequest) -> String {
+        let fwd_header_name = x_forwarded_for_header_name();
         let mut result = String::new();
 
         for (key, value) in req.headers() {
-            if key.as_str() == X_FORWARDED_HEADER_NAME {
+            if key == fwd_header_name {
                 result.push_str(value.to_str().unwrap());
                 break;
             }
         }
 
-        // adds proxy server IP address
+        // adds client IP address
         // to x-forwarded-for header
-        // if it's not already there
         let client_connection_info = req.connection_info();
         let client_remote_ip = client_connection_info.remote().unwrap();
-        if !result.ends_with(client_remote_ip) {
 
-            if !result.is_empty() {
-                result.push_str(", ");
-            }
-
-            result.push_str(client_remote_ip);
+        if !result.is_empty() {
+            result.push_str(", ");
         }
+        result.push_str(client_remote_ip);
 
         result
     }
@@ -78,7 +82,7 @@ impl<'a> ReverseProxy<'a> {
 
         let mut forward_req = client::ClientRequest::build_from(&req);
         forward_req.uri(self.forward_uri(&req).as_str());
-        forward_req.set_header(X_FORWARDED_HEADER_NAME, self.x_forwarded_header(&req));
+        forward_req.set_header(x_forwarded_for_header_name(), self.x_forwarded_for_value(&req));
         forward_req.set_header(actix_web::http::header::USER_AGENT, "");
 
         let forward_body = req.payload().from_err();
