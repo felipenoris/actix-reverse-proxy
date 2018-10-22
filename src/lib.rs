@@ -56,7 +56,11 @@ impl<'a> ReverseProxy<'a> {
         // if it's not already there
         let proxy_ip: &str = self.get_proxy_ip();
         if !result.ends_with(proxy_ip) {
-            result.push_str(", ");
+
+            if !result.is_empty() {
+                result.push_str(", ");
+            }
+
             result.push_str(proxy_ip);
         }
 
@@ -84,10 +88,10 @@ impl<'a> ReverseProxy<'a> {
         let forward_req = forward_req.body(actix_web::Body::Streaming(Box::new(forward_body)));
 
         forward_req.expect("To create valid forward request")
-        			.send()
-        			.timeout(self.get_timeout())
+                    .send()
+                    .timeout(self.get_timeout())
                     .map_err(|error| {
-                    	println!("Error: {}", error);
+                        println!("Error: {}", error);
                         error.into()
                     })
                     .map(|resp| {
