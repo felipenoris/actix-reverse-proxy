@@ -13,15 +13,14 @@ const X_FORWARDED_HEADER_NAME: &'static str = "x-forwarded-for";
 static DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub struct ReverseProxy<'a> {
-    proxy_ip_addr: &'a str,
     forward_url: &'a str,
     timeout: Duration,
 }
 
 impl<'a> ReverseProxy<'a> {
 
-    pub fn new(proxy_ip_addr: &'a str, forward_url: &'a str) -> ReverseProxy<'a> {
-        ReverseProxy{ proxy_ip_addr, forward_url, timeout: DEFAULT_TIMEOUT }
+    pub fn new(forward_url: &'a str) -> ReverseProxy<'a> {
+        ReverseProxy{ forward_url, timeout: DEFAULT_TIMEOUT }
     }
 
     pub fn timeout(mut self, duration: Duration) -> ReverseProxy<'a> {
@@ -31,10 +30,6 @@ impl<'a> ReverseProxy<'a> {
 
     fn get_timeout(&self) -> Duration {
         self.timeout
-    }
-
-    fn get_proxy_ip(&self) -> &str {
-        self.proxy_ip_addr
     }
 
     fn get_forward_url(&self) -> &str {
@@ -54,14 +49,15 @@ impl<'a> ReverseProxy<'a> {
         // adds proxy server IP address
         // to x-forwarded-for header
         // if it's not already there
-        let proxy_ip: &str = self.get_proxy_ip();
-        if !result.ends_with(proxy_ip) {
+        let client_connection_info = req.connection_info();
+        let client_remote_ip = client_connection_info.remote().unwrap();
+        if !result.ends_with(client_remote_ip) {
 
             if !result.is_empty() {
                 result.push_str(", ");
             }
 
-            result.push_str(proxy_ip);
+            result.push_str(client_remote_ip);
         }
 
         result
@@ -83,6 +79,7 @@ impl<'a> ReverseProxy<'a> {
         let mut forward_req = client::ClientRequest::build_from(&req);
         forward_req.uri(self.forward_uri(&req).as_str());
         forward_req.set_header(X_FORWARDED_HEADER_NAME, self.x_forwarded_header(&req));
+        forward_req.set_header(actix_web::http::header::USER_AGENT, "");
 
         let forward_body = req.payload().from_err();
         let forward_req = forward_req.body(actix_web::Body::Streaming(Box::new(forward_body)));
