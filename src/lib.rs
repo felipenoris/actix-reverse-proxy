@@ -64,11 +64,6 @@ fn remove_connection_headers(headers: &mut HeaderMap) {
     }
 
     for h in headers_to_delete {
-        // DEBUG
-        if headers.contains_key(&h) {
-            println!("Removing Connection header `{}`", h);
-        }
-
         headers.remove(h);
     }
 }
@@ -171,12 +166,6 @@ impl<'a> ReverseProxy<'a> {
         disable_user_agent_if_not_set(forward_req.headers_mut());
         remove_request_hop_by_hop_headers(forward_req.headers_mut());
 
-        // DEBUG
-        println!("#### ClientRequest Headers ####");
-        for (key, value) in forward_req.headers() {
-            println!("[{:?}] = {:?}", key, value);
-        }
-
         forward_req.send()
                     .timeout(self.timeout)
                     .map_err(|error| {
@@ -195,12 +184,6 @@ impl<'a> ReverseProxy<'a> {
                         let mut back_rsp = back_rsp.body(actix_web::Body::Streaming(Box::new(back_body)));
                         remove_connection_headers(back_rsp.headers_mut());
                         remove_response_hop_by_hop_headers(back_rsp.headers_mut());
-
-                        // DEBUG
-                        println!("#### Response Headers ####");
-                        for (key, value) in back_rsp.headers() {
-                            println!("[{:?}] = {:?}", key, value);
-                        }
 
                         back_rsp
                     })
