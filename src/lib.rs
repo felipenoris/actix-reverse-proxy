@@ -139,6 +139,11 @@ impl<'a> ReverseProxy<'a> {
         remove_connection_headers(forward_req.headers_mut());
         remove_request_hop_by_hop_headers(forward_req.headers_mut());
 
+        println!("#### REVERSE PROXY REQUEST HEADERS");
+        for (key, value) in forward_req.headers() {
+            println!("[{:?}] = {:?}", key, value);
+        }
+
         forward_req.send()
                     .timeout(self.timeout)
                     .map_err(|error| {
@@ -159,7 +164,13 @@ impl<'a> ReverseProxy<'a> {
                         let mut back_rsp = back_rsp
                             .no_chunking()
                             .body(actix_web::Body::Streaming(Box::new(back_body)));
+
                         remove_connection_headers(back_rsp.headers_mut());
+
+                        println!("#### REVERSE PROXY REQUEST HEADERS");
+                        for (key, value) in back_rsp.headers() {
+                            println!("[{:?}] = {:?}", key, value);
+                        }
 
                         back_rsp
                     })
