@@ -1,5 +1,7 @@
 
-// Based on https://github.com/DoumanAsh/actix-reverse-proxy
+// Based on:
+//   https://github.com/DoumanAsh/actix-reverse-proxy
+//   https://golang.org/src/net/http/httputil/reverseproxy.go
 
 extern crate actix_web;
 extern crate futures;
@@ -53,7 +55,6 @@ fn add_client_ip(fwd_header_value: &mut String, client_addr: SocketAddr) {
     fwd_header_value.push_str(client_ip_str);
 }
 
-// based on https://golang.org/src/net/http/httputil/reverseproxy.go
 fn remove_connection_headers(headers: &mut HeaderMap) {
     let mut headers_to_delete: Vec<String> = Vec::new();
     let header_connection = &(*HEADER_CONNECTION);
@@ -71,19 +72,11 @@ fn remove_connection_headers(headers: &mut HeaderMap) {
     }
 }
 
-// based on https://golang.org/src/net/http/httputil/reverseproxy.go
 fn remove_request_hop_by_hop_headers(headers: &mut HeaderMap) {
     for h in HOP_BY_HOP_HEADERS.iter() {
         if headers.contains_key(h) && (headers[h] == "" || ( h == *HEADER_TE && headers[h] == "trailers")  ) {
             continue;
         }
-        headers.remove(h);
-    }
-}
-
-// based on https://golang.org/src/net/http/httputil/reverseproxy.go
-fn remove_response_hop_by_hop_headers(headers: &mut HeaderMap) {
-    for h in HOP_BY_HOP_HEADERS.iter() {
         headers.remove(h);
     }
 }
@@ -157,13 +150,16 @@ impl<'a> ReverseProxy<'a> {
 
                         // copy headers
                         for (key, value) in resp.headers() {
-                            back_rsp.header(key.clone(), value.clone());
+                            if !HOP_BY_HOP_HEADERS.contains(key) {
+                                back_rsp.header(key.clone(), value.clone());
+                            }
                         }
 
                         let back_body = resp.payload().from_err();
-                        let mut back_rsp = back_rsp.body(actix_web::Body::Streaming(Box::new(back_body)));
+                        let mut back_rsp = back_rsp
+                            .no_chunking()
+                            .body(actix_web::Body::Streaming(Box::new(back_body)));
                         remove_connection_headers(back_rsp.headers_mut());
-                        remove_response_hop_by_hop_headers(back_rsp.headers_mut());
 
                         back_rsp
                     })
