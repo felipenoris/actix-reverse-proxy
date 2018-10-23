@@ -166,7 +166,7 @@ impl<'a> ReverseProxy<'a> {
 
                         remove_connection_headers(back_rsp.headers_mut());
 
-                        println!("#### REVERSE PROXY REQUEST HEADERS");
+                        println!("#### REVERSE PROXY RESPONSE HEADERS");
                         for (key, value) in back_rsp.headers() {
                             println!("[{:?}] = {:?}", key, value);
                         }
