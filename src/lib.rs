@@ -8,7 +8,7 @@ extern crate futures;
 extern crate lazy_static;
 
 use actix_web::{HttpRequest, HttpResponse, HttpMessage, client};
-use actix_web::http::header::{HeaderName, HeaderValue, HeaderMap};
+use actix_web::http::header::{HeaderName, HeaderMap};
 use futures::{Stream, Future};
 
 use std::time::Duration;
@@ -68,15 +68,6 @@ fn remove_connection_headers(headers: &mut HeaderMap) {
 
     for h in headers_to_delete {
         headers.remove(h);
-    }
-}
-
-// based on https://golang.org/src/net/http/httputil/reverseproxy.go
-fn disable_user_agent_if_not_set(headers: &mut HeaderMap) {
-    let user_agent_header = actix_web::http::header::USER_AGENT;
-
-    if !headers.contains_key(&user_agent_header) {
-        headers.insert(&user_agent_header, HeaderValue::from_static(""));
     }
 }
 
@@ -147,11 +138,12 @@ impl<'a> ReverseProxy<'a> {
 
         let forward_body = req.payload().from_err();
         let mut forward_req = forward_req
+                                    .no_default_headers()
+                                    .set_header_if_none(actix_web::http::header::USER_AGENT, "")
                                     .body(actix_web::Body::Streaming(Box::new(forward_body)))
                                     .expect("To create valid forward request");
 
         remove_connection_headers(forward_req.headers_mut());
-        disable_user_agent_if_not_set(forward_req.headers_mut());
         remove_request_hop_by_hop_headers(forward_req.headers_mut());
 
         forward_req.send()
