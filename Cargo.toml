@@ -13,6 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 actix-web = "0.7"
 futures = "0.1"
+lazy_static = "1.1"
 
 [profile.release]
 lto = true

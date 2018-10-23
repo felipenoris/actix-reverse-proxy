@@ -4,6 +4,9 @@
 extern crate actix_web;
 extern crate futures;
 
+#[macro_use]
+extern crate lazy_static;
+
 use actix_web::{HttpRequest, HttpResponse, HttpMessage, client};
 use actix_web::http::header::{HeaderName, HeaderValue, HeaderMap};
 use futures::{Stream, Future};
@@ -14,16 +17,31 @@ use std::net::SocketAddr;
 #[cfg(test)]
 mod tests;
 
-const X_FORWARDED_FOR_HEADER_NAME_BYTES: &'static [u8] = b"X-Forwarded-For";
+lazy_static! {
+    static ref HEADER_X_FORWARDED_FOR: HeaderName = HeaderName::from_lowercase(b"x-forwarded-for").unwrap();
+
+    static ref HOP_BY_HOP_HEADERS: Vec<HeaderName> = vec![
+        HeaderName::from_lowercase(b"connection").unwrap(),
+        HeaderName::from_lowercase(b"proxy-connection").unwrap(),
+        HeaderName::from_lowercase(b"keep-alive").unwrap(),
+        HeaderName::from_lowercase(b"proxy-authenticate").unwrap(),
+        HeaderName::from_lowercase(b"proxy-authorization").unwrap(),
+        HeaderName::from_lowercase(b"te").unwrap(),
+        HeaderName::from_lowercase(b"trailer").unwrap(),
+        HeaderName::from_lowercase(b"transfer-encoding").unwrap(),
+        HeaderName::from_lowercase(b"upgrade").unwrap(),
+    ];
+
+    static ref HEADER_TE: HeaderName = HeaderName::from_lowercase(b"te").unwrap();
+
+    static ref HEADER_CONNECTION: HeaderName = HeaderName::from_lowercase(b"connection").unwrap();
+}
+
 static DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub struct ReverseProxy<'a> {
     forward_url: &'a str,
     timeout: Duration,
-}
-
-fn x_forwarded_for_header_name() -> HeaderName {
-    HeaderName::from_bytes(X_FORWARDED_FOR_HEADER_NAME_BYTES).unwrap()
 }
 
 fn add_client_ip(fwd_header_value: &mut String, client_addr: SocketAddr) {
@@ -38,9 +56,10 @@ fn add_client_ip(fwd_header_value: &mut String, client_addr: SocketAddr) {
 // based on https://golang.org/src/net/http/httputil/reverseproxy.go
 fn remove_connection_headers(headers: &mut HeaderMap) {
     let mut headers_to_delete: Vec<String> = Vec::new();
+    let header_connection = &(*HEADER_CONNECTION);
 
-    if headers.contains_key("Connection") {
-        if let Ok(connection_header_value) = headers["Connection"].to_str() {
+    if headers.contains_key(header_connection) {
+        if let Ok(connection_header_value) = headers[header_connection].to_str() {
             for h in connection_header_value.split(',').map(|s| s.trim()) {
                 headers_to_delete.push(String::from(h));
             }
@@ -62,32 +81,19 @@ fn disable_user_agent_if_not_set(headers: &mut HeaderMap) {
 }
 
 // based on https://golang.org/src/net/http/httputil/reverseproxy.go
-const HOP_BY_HOP_HEADERS: [&str; 9] = [
-        "Connection",
-        "Proxy-Connection",
-        "Keep-Alive",
-        "Proxy-Authenticate",
-        "Proxy-Authorization",
-        "Te",
-        "Trailer",
-        "Transfer-Encoding",
-        "Upgrade",
-];
-
-// based on https://golang.org/src/net/http/httputil/reverseproxy.go
 fn remove_request_hop_by_hop_headers(headers: &mut HeaderMap) {
     for h in HOP_BY_HOP_HEADERS.iter() {
-        if headers.contains_key(*h) && (headers[*h] == "" || ( *h == "Te" && headers[*h] == "trailers")  ) {
+        if headers.contains_key(h) && (headers[h] == "" || ( h == *HEADER_TE && headers[h] == "trailers")  ) {
             continue;
         }
-        headers.remove(*h);
+        headers.remove(h);
     }
 }
 
 // based on https://golang.org/src/net/http/httputil/reverseproxy.go
 fn remove_response_hop_by_hop_headers(headers: &mut HeaderMap) {
     for h in HOP_BY_HOP_HEADERS.iter() {
-        headers.remove(*h);
+        headers.remove(h);
     }
 }
 
@@ -103,11 +109,10 @@ impl<'a> ReverseProxy<'a> {
     }
 
     fn x_forwarded_for_value(&self, req: &HttpRequest) -> String {
-        let fwd_header_name = x_forwarded_for_header_name();
         let mut result = String::new();
 
         for (key, value) in req.headers() {
-            if key == fwd_header_name {
+            if key == *HEADER_X_FORWARDED_FOR {
                 result.push_str(value.to_str().unwrap());
                 break;
             }
@@ -138,7 +143,7 @@ impl<'a> ReverseProxy<'a> {
 
         let mut forward_req = client::ClientRequest::build_from(&req);
         forward_req.uri(self.forward_uri(&req).as_str());
-        forward_req.set_header(x_forwarded_for_header_name(), self.x_forwarded_for_value(&req));
+        forward_req.set_header( &(*HEADER_X_FORWARDED_FOR), self.x_forwarded_for_value(&req));
 
         let forward_body = req.payload().from_err();
         let mut forward_req = forward_req
