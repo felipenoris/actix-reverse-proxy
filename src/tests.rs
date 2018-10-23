@@ -1,6 +1,8 @@
 
-use parse_and_add_client_ip;
+use add_client_ip;
 use actix_web::http::header::HeaderName;
+use std::net::SocketAddr;
+use std::str::FromStr;
 
 #[test]
 fn compare_headers() {
@@ -12,7 +14,7 @@ fn compare_headers() {
 #[test]
 fn test_add_client_ip() {
     let mut header_value = String::from("192.168.25.12");
-    let client_address = "127.0.0.1:8000";
-    parse_and_add_client_ip(&mut header_value, client_address);
+    let client_address = SocketAddr::from_str("127.0.0.1:8000").unwrap();
+    add_client_ip(&mut header_value, client_address);
     assert_eq!(&header_value, "192.168.25.12, 127.0.0.1");
 }

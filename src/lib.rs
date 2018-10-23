@@ -9,8 +9,7 @@ use actix_web::http::header::{HeaderName, HeaderValue, HeaderMap};
 use futures::{Stream, Future};
 
 use std::time::Duration;
-use std::net::{SocketAddr, IpAddr};
-use std::str::FromStr;
+use std::net::SocketAddr;
 
 #[cfg(test)]
 mod tests;
@@ -27,28 +26,13 @@ fn x_forwarded_for_header_name() -> HeaderName {
     HeaderName::from_bytes(X_FORWARDED_FOR_HEADER_NAME_BYTES).unwrap()
 }
 
-fn add_client_ip(fwd_header_value: &mut String, client_ip: &str) {
+fn add_client_ip(fwd_header_value: &mut String, client_addr: SocketAddr) {
     if !fwd_header_value.is_empty() {
         fwd_header_value.push_str(", ");
     }
-    fwd_header_value.push_str(client_ip);
-}
 
-fn parse_and_add_client_ip(fwd_header_value: &mut String, client_address: &str) {
-    match SocketAddr::from_str(client_address) {
-        Ok(client_address) => {
-            let client_ip = format!("{}", client_address.ip());
-            add_client_ip(fwd_header_value, &client_ip);
-        },
-        Err(_) => {
-            match IpAddr::from_str(client_address) {
-                Ok(_) => {
-                    add_client_ip(fwd_header_value, client_address);
-                },
-                Err(e) => println!("Failed parsing client IP for {}: {:?}", client_address, e),
-            }
-        }
-    };
+    let client_ip_str = &format!("{}", client_addr.ip());
+    fwd_header_value.push_str(client_ip_str);
 }
 
 // based on https://golang.org/src/net/http/httputil/reverseproxy.go
@@ -132,9 +116,8 @@ impl<'a> ReverseProxy<'a> {
         // adds client IP address
         // to x-forwarded-for header
         // if it's available
-        let client_connection_info = req.connection_info();
-        if let Some(client_address) = client_connection_info.remote() {
-            parse_and_add_client_ip(&mut result, client_address)
+        if let Some(peer_addr) = req.peer_addr() {
+            add_client_ip(&mut result, peer_addr);
         }
 
         result
