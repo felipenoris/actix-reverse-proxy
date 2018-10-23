@@ -162,7 +162,6 @@ impl<'a> ReverseProxy<'a> {
 
                         let back_body = resp.payload().from_err();
                         let mut back_rsp = back_rsp
-                            .no_chunking()
                             .body(actix_web::Body::Streaming(Box::new(back_body)));
 
                         remove_connection_headers(back_rsp.headers_mut());
