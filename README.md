@@ -1,6 +1,13 @@
 
 # actix-reverse-proxy
 
+[![License][license-img]](LICENSE)
+[![travis][travis-img]][travis-url]
+
+[license-img]: http://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat
+[travis-img]: https://img.shields.io/travis/felipenoris/actix-reverse-proxy/master.svg?label=Linux
+[travis-url]: https://travis-ci.org/felipenoris/actix-reverse-proxy
+
 This is a simple configurable Reverse Proxy for Actix framework.
 
 Based on https://github.com/DoumanAsh/actix-reverse-proxy.

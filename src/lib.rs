@@ -123,14 +123,6 @@ impl<'a> ReverseProxy<'a> {
         self
     }
 
-    fn get_timeout(&self) -> Duration {
-        self.timeout
-    }
-
-    fn get_forward_url(&self) -> &str {
-        self.forward_url
-    }
-
     fn x_forwarded_for_value(&self, req: &HttpRequest) -> String {
         let fwd_header_name = x_forwarded_for_header_name();
         let mut result = String::new();
@@ -154,7 +146,7 @@ impl<'a> ReverseProxy<'a> {
     }
 
     fn forward_uri(&self, req: &HttpRequest) -> String {
-        let forward_url: &str = self.get_forward_url();
+        let forward_url: &str = self.forward_url;
 
         let forward_uri = match req.uri().query() {
             Some(query) => format!("{}{}?{}", forward_url, req.uri().path(), query),
@@ -186,7 +178,7 @@ impl<'a> ReverseProxy<'a> {
         }
 
         forward_req.send()
-                    .timeout(self.get_timeout())
+                    .timeout(self.timeout)
                     .map_err(|error| {
                         println!("Error: {}", error);
                         error.into()
