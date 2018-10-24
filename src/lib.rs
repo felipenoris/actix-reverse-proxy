@@ -132,6 +132,7 @@ impl<'a> ReverseProxy<'a> {
         let forward_body = req.payload().from_err();
         let mut forward_req = forward_req
                                     .no_default_headers()
+                                    .chunked()
                                     .set_header_if_none(actix_web::http::header::USER_AGENT, "")
                                     .body(actix_web::Body::Streaming(Box::new(forward_body)))
                                     .expect("To create valid forward request");
