@@ -23,7 +23,7 @@ lazy_static! {
     static ref HEADER_X_FORWARDED_FOR: HeaderName = HeaderName::from_lowercase(b"x-forwarded-for").unwrap();
 
     static ref HOP_BY_HOP_HEADERS: Vec<HeaderName> = vec![
-        HeaderName::from_lowercase(b"connection").unwrap(),
+        /*HeaderName::from_lowercase(b"connection").unwrap(),
         HeaderName::from_lowercase(b"proxy-connection").unwrap(),
         HeaderName::from_lowercase(b"keep-alive").unwrap(),
         HeaderName::from_lowercase(b"proxy-authenticate").unwrap(),
@@ -31,7 +31,7 @@ lazy_static! {
         HeaderName::from_lowercase(b"te").unwrap(),
         HeaderName::from_lowercase(b"trailer").unwrap(),
         HeaderName::from_lowercase(b"transfer-encoding").unwrap(),
-        HeaderName::from_lowercase(b"upgrade").unwrap(),
+        HeaderName::from_lowercase(b"upgrade").unwrap(),*/
     ];
 
     static ref HEADER_TE: HeaderName = HeaderName::from_lowercase(b"te").unwrap();
