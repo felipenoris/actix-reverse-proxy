@@ -7,10 +7,13 @@
 [license-img]: http://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat
 [travis-img]: https://img.shields.io/travis/felipenoris/actix-reverse-proxy/master.svg?label=Linux
 [travis-url]: https://travis-ci.org/felipenoris/actix-reverse-proxy
+[![Project Status: Abandoned – Initial development has started, but there has not yet been a stable, usable release; the project has been abandoned and the author(s) do not intend on continuing development.](https://www.repostatus.org/badges/latest/abandoned.svg)](https://www.repostatus.org/#abandoned)
 
 This is a simple configurable Reverse Proxy for Actix framework.
 
 Based on https://github.com/DoumanAsh/actix-reverse-proxy.
+
+This project has been abandoned in favor of [hyper-reverse-proxy](https://github.com/felipenoris/hyper-reverse-proxy) (see discussion [here](https://github.com/DoumanAsh/actix-reverse-proxy/issues/2)).
 
 ## Working Example
 
